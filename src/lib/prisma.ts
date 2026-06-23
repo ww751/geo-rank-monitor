@@ -1,25 +1,23 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
 function createRealClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
+  let connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error("DATABASE_URL 未设置");
   }
 
-  // Railway PostgreSQL 需要 SSL，用 pg Pool 显式配置
-  const pool = new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-  });
+  // Railway PostgreSQL 需要 SSL；在连接串里追加 sslmode=require
+  if (!connectionString.includes("sslmode")) {
+    connectionString += connectionString.includes("?") ? "&sslmode=require" : "?sslmode=require";
+  }
 
   const client = new PrismaClient({
-    adapter: new PrismaPg(pool),
+    adapter: new PrismaPg({ connectionString }),
     log: ["error"],
   });
 
