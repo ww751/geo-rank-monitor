@@ -1,5 +1,6 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -11,8 +12,14 @@ function createRealClient(): PrismaClient {
     throw new Error("DATABASE_URL 未设置");
   }
 
+  // Railway PostgreSQL 需要 SSL，用 pg Pool 显式配置
+  const pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+  });
+
   const client = new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg(pool),
     log: ["error"],
   });
 
@@ -38,7 +45,6 @@ function buildSafeClient(): PrismaClient {
         get(_t: unknown, method: string | symbol) {
           if (method === "then") return undefined;
           return (...args: unknown[]) => {
-            // findMany / findUnique / findFirst 返回空数组或 null
             if (String(method).startsWith("find")) {
               if (String(method) === "findMany" || String(method) === "findRaw" || String(method) === "aggregate" || String(method) === "groupBy") {
                 return Promise.resolve([]);
@@ -46,7 +52,6 @@ function buildSafeClient(): PrismaClient {
               if (String(method) === "count") return Promise.resolve(0);
               return Promise.resolve(null);
             }
-            // create / update / upsert / delete 返回空对象
             return Promise.resolve({});
           };
         },
@@ -60,7 +65,6 @@ function buildSafeClient(): PrismaClient {
     modelsObj[model] = modelProxy;
   }
 
-  // 提供基本方法
   modelsObj.$connect = () => Promise.resolve();
   modelsObj.$disconnect = () => Promise.resolve();
   modelsObj.$transaction = (fn: unknown) => {
@@ -75,13 +79,11 @@ function buildSafeClient(): PrismaClient {
   return modelsObj as unknown as PrismaClient;
 }
 
-// 懒加载 Proxy：构建阶段返回 mock，运行时有 DB 连接后才创建真实客户端
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const prisma: PrismaClient = new Proxy({} as any, {
   get(_, prop: string | symbol) {
     const hasDbUrl = !!process.env.DATABASE_URL;
     if (!hasDbUrl && !globalForPrisma.prisma) {
-      // 构建阶段：返回安全的 mock
       const mock = buildSafeClient();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const value = (mock as any)[prop];
