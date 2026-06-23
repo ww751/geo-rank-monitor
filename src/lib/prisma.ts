@@ -10,9 +10,8 @@ const globalForPrisma = globalThis as unknown as {
 
 function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
-
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required. Set it in .env.");
+    throw new Error("DATABASE_URL is required in runtime.");
   }
 
   const pool =
@@ -34,17 +33,26 @@ function createPrismaClient(): PrismaClient {
   return client;
 }
 
-// 构建时 DATABASE_URL 可能不存在，延迟初始化避免 next build 阶段报错
-// 使用 any 绕过 Proxy 与 PrismaClient 的类型兼容问题
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const prisma: PrismaClient = new Proxy({} as any, {
-  get(_, prop: string | symbol) {
-    const client = globalForPrisma.prisma ?? createPrismaClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const value = (client as any)[prop];
-    if (typeof value === "function") {
-      return value.bind(client);
-    }
-    return value;
-  },
-});
+// 构建阶段（DATABASE_URL 不存在）：返回 Mock Proxy 以保证 next build 通过
+// 运行时（DATABASE_URL 存在）：返回真实 PrismaClient
+function getPrisma(): PrismaClient {
+  if (!process.env.DATABASE_URL) {
+    // 构建阶段，所有方法返回空 Promise 以避免报错
+    return new Proxy(
+      {},
+      {
+        get() {
+          return () => Promise.resolve([]);
+        },
+      }
+    ) as unknown as PrismaClient;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return globalForPrisma.prisma ?? createPrismaClient();
+  }
+
+  return createPrismaClient();
+}
+
+export const prisma: PrismaClient = getPrisma();
