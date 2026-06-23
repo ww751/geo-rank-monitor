@@ -11,9 +11,9 @@ function createRealClient(): PrismaClient {
     throw new Error("DATABASE_URL 未设置");
   }
 
-  // Railway PostgreSQL 需要 SSL；在连接串里追加 sslmode=require
+  // Railway PostgreSQL 使用自签名证书，需要 sslmode=no-verify
   if (!connectionString.includes("sslmode")) {
-    connectionString += connectionString.includes("?") ? "&sslmode=require" : "?sslmode=require";
+    connectionString += connectionString.includes("?") ? "&sslmode=no-verify" : "?sslmode=no-verify";
   }
 
   const client = new PrismaClient({
