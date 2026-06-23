@@ -1,0 +1,683 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ClientStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum KeywordIntent {
+  BRAND
+  PRODUCT
+  SOLUTION
+  COMPARISON
+  REPUTATION
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  MIXED
+  UNKNOWN
+}
+
+enum CitationType {
+  OFFICIAL
+  MEDIA
+  QA
+  FORUM
+  WIKI
+  MAP
+  LOCAL_LIFE
+  SOCIAL
+  UNKNOWN
+  OTHER
+}
+
+enum ContentType {
+  ARTICLE
+  LANDING_PAGE
+  CASE_STUDY
+  DOC
+  FAQ
+  VIDEO
+}
+
+enum ContentStatus {
+  PLANNED
+  DRAFT
+  PUBLISHED
+  NEEDS_UPDATE
+}
+
+enum ContentPublicationStatus {
+  PUBLISHED
+  WAITING_RETEST
+  RETESTING
+  REVIEWED
+}
+
+enum PublicationRetestStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ReportStatus {
+  DRAFT
+  READY
+  SENT
+}
+
+enum GeoScoreRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum MonitoringJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum OptimizationTaskType {
+  CONTENT_ASSET
+  TOP3_BOOST
+  CITATION_BUILDING
+  KEYWORD_COVERAGE
+  COMPETITOR_GAP
+}
+
+enum OptimizationTaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum OptimizationTaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  DISMISSED
+}
+
+enum ImprovementExperimentStatus {
+  PLANNED
+  BASELINE_COLLECTED
+  OPTIMIZATION_REPLAYED
+  REAL_VALIDATED
+  COMPLETED
+}
+
+enum PlatformSessionStatus {
+  NOT_CONFIGURED
+  READY
+  NEEDS_LOGIN
+  EXPIRED
+}
+
+enum PipelineRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ShareLinkStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+}
+
+model Client {
+  id           String       @id @default(cuid())
+  name         String
+  industry     String
+  contactName  String?
+  contactEmail String?
+  status       ClientStatus @default(ACTIVE)
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  brands     Brand[]
+  reports    Report[]
+  shareLinks ClientShareLink[]
+
+  @@map("clients")
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  clientId    String
+  name        String
+  website     String?
+  category    String
+  description String?
+  geoGoal     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client                 Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  keywords               Keyword[]
+  competitors            Competitor[]
+  rankResults            RankResult[]
+  contents               ContentAsset[]
+  geoScores              GeoScore[]
+  monitoringJobs         MonitoringJob[]
+  optimizationTasks      OptimizationTask[]
+  improvementExperiments ImprovementExperiment[]
+  contentPublications    ContentPublication[]
+
+  @@index([clientId])
+  @@map("brands")
+}
+
+model Keyword {
+  id        String        @id @default(cuid())
+  brandId   String?
+  clusterId String?
+  text      String
+  intent    KeywordIntent @default(SOLUTION)
+  priority  Int           @default(3)
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  brand                  Brand?                  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  cluster                KeywordCluster?         @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  rankResults            RankResult[]
+  geoScores              GeoScore[]
+  monitoringJobs         MonitoringJob[]
+  optimizationTasks      OptimizationTask[]
+  improvementExperiments ImprovementExperiment[]
+  contentPublications    ContentPublication[]
+
+  @@index([brandId])
+  @@index([clusterId])
+  @@map("keywords")
+}
+
+model KeywordCluster {
+  id          String   @id @default(cuid())
+  name        String
+  city        String
+  industry    String
+  category    String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  keywords Keyword[]
+
+  @@index([city, industry])
+  @@index([category])
+  @@map("keyword_clusters")
+}
+
+model AiPlatform {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  homepageUrl String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rankResults            RankResult[]
+  monitoringJobs         MonitoringJob[]
+  session                PlatformSession?
+  improvementExperiments ImprovementExperiment[]
+
+  @@map("ai_platforms")
+}
+
+model RankResult {
+  id              String    @id @default(cuid())
+  brandId         String
+  keywordId       String
+  platformId      String
+  prompt          String
+  answer          String
+  brandMentioned  Boolean   @default(false)
+  rankPosition    Int?
+  sentiment       Sentiment @default(UNKNOWN)
+  visibilityScore Int       @default(0)
+  sampleSource    String    @default("manual")
+  sampledAt       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  brand                 Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  keyword               Keyword                 @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  platform              AiPlatform              @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  citations             Citation[]
+  baselineExperiments   ImprovementExperiment[] @relation("BaselineRankResult")
+  replayExperiments     ImprovementExperiment[] @relation("ReplayRankResult")
+  validationExperiments ImprovementExperiment[] @relation("ValidationRankResult")
+
+  @@index([brandId, sampledAt])
+  @@index([keywordId])
+  @@index([platformId])
+  @@index([sampledAt])
+  @@map("rank_results")
+}
+
+model Competitor {
+  id        String   @id @default(cuid())
+  brandId   String
+  name      String
+  website   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+  @@map("competitors")
+}
+
+model Citation {
+  id           String       @id @default(cuid())
+  rankResultId String
+  title        String
+  url          String
+  domain       String
+  type         CitationType @default(OTHER)
+  position     Int?
+  isValid      Boolean      @default(true)
+  authorityScore Int        @default(0)
+  lastCheckedAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  rankResult RankResult @relation(fields: [rankResultId], references: [id], onDelete: Cascade)
+
+  @@index([rankResultId])
+  @@index([domain])
+  @@index([type])
+  @@map("citations")
+}
+
+model ContentAsset {
+  id                 String        @id @default(cuid())
+  brandId            String
+  title              String
+  url                String?
+  contentType        ContentType   @default(ARTICLE)
+  status             ContentStatus @default(PLANNED)
+  targetKeyword      String?
+  notes              String?
+  optimizationTaskId String?
+  ownerName          String?
+  reviewedAt         DateTime?
+  beforeScore        Int?
+  afterScore         Int?
+  impactNotes        String?
+  publishedAt        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  brand            Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  optimizationTask OptimizationTask? @relation(fields: [optimizationTaskId], references: [id], onDelete: SetNull)
+  publications     ContentPublication[]
+
+  @@index([brandId])
+  @@index([optimizationTaskId])
+  @@map("contents")
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  clientId    String
+  title       String
+  periodStart DateTime
+  periodEnd   DateTime
+  summary     String
+  status      ReportStatus @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, periodStart])
+  @@map("reports")
+}
+
+model AnswerAnalysis {
+  id              String   @id @default(cuid())
+  platform        String
+  keyword         String
+  answer          String
+  brandsFound     String[] @default([])
+  filteredBrands  String[] @default([])
+  rawCandidates   String[] @default([])
+  clientFound     Boolean  @default(false)
+  clientRank      Int?
+  competitors     String[] @default([])
+  citationUrls    String[] @default([])
+  ruleVersion     String   @default("rules-v1")
+  confidenceScore Float    @default(0)
+  extractionTrace Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  rankedBrands        RankedBrand[]
+  geoScores           GeoScore[]
+  optimizationTasks   OptimizationTask[]
+  collectionArtifacts CollectionArtifact[]
+
+  @@index([platform])
+  @@index([keyword])
+  @@index([createdAt])
+  @@index([platform, createdAt])
+  @@map("answer_analyses")
+}
+
+model RankedBrand {
+  id               String   @id @default(cuid())
+  answerAnalysisId String
+  brand            String
+  rank             Int
+  createdAt        DateTime @default(now())
+
+  answerAnalysis AnswerAnalysis @relation(fields: [answerAnalysisId], references: [id], onDelete: Cascade)
+
+  @@index([answerAnalysisId])
+  @@index([rank])
+  @@map("ranked_brands")
+}
+
+model GeoScore {
+  id               String   @id @default(cuid())
+  runId            String?
+  answerAnalysisId String?
+  brandId          String
+  platform         String
+  keywordId        String
+  visibilityScore  Int      @default(0)
+  rankingScore     Int      @default(0)
+  citationScore    Int      @default(0)
+  coverageScore    Int      @default(0)
+  totalScore       Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  brand             Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  keyword           Keyword            @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  run               GeoScoreRun?       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  answerAnalysis    AnswerAnalysis?    @relation(fields: [answerAnalysisId], references: [id], onDelete: SetNull)
+  optimizationTasks OptimizationTask[]
+
+  @@index([runId])
+  @@index([answerAnalysisId])
+  @@index([brandId, createdAt])
+  @@index([keywordId])
+  @@index([keywordId, platform])
+  @@index([platform])
+  @@index([runId, brandId, keywordId, platform])
+  @@map("geo_scores")
+}
+
+model GeoScoreRun {
+  id           String            @id @default(cuid())
+  status       GeoScoreRunStatus @default(RUNNING)
+  source       String            @default("manual")
+  filters      Json              @default("{}")
+  startedAt    DateTime          @default(now())
+  completedAt  DateTime?
+  errorMessage String?
+  createdAt    DateTime          @default(now())
+
+  geoScores GeoScore[]
+
+  @@index([status, startedAt])
+  @@map("geo_score_runs")
+}
+
+model MonitoringJob {
+  id            String              @id @default(cuid())
+  brandId       String
+  keywordId     String
+  platformId    String
+  status        MonitoringJobStatus @default(PENDING)
+  scheduledAt   DateTime            @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  failureReason String?
+  retryCount    Int                 @default(0)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  brand        Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  keyword      Keyword              @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  platform     AiPlatform           @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  artifacts    CollectionArtifact[]
+  pipelineRuns PipelineRun[]
+  publicationRetests PublicationRetest[]
+
+  @@index([brandId])
+  @@index([keywordId])
+  @@index([platformId])
+  @@index([status, scheduledAt])
+  @@map("monitoring_jobs")
+}
+
+model CollectionArtifact {
+  id               String   @id @default(cuid())
+  monitoringJobId  String
+  answerAnalysisId String?
+  rawAnswer        String
+  screenshotPath   String?
+  htmlSummary      String?
+  durationMs       Int?
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now())
+
+  monitoringJob  MonitoringJob   @relation(fields: [monitoringJobId], references: [id], onDelete: Cascade)
+  answerAnalysis AnswerAnalysis? @relation(fields: [answerAnalysisId], references: [id], onDelete: SetNull)
+
+  @@index([monitoringJobId])
+  @@index([answerAnalysisId])
+  @@map("collection_artifacts")
+}
+
+model ContentPublication {
+  id             String                   @id @default(cuid())
+  contentId      String?
+  brandId        String
+  keywordId      String?
+  platform       String                   @default("Doubao")
+  publishedUrl   String?
+  publishedAt    DateTime                 @default(now())
+  status         ContentPublicationStatus @default(PUBLISHED)
+  notes          String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  content ContentAsset? @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  brand   Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  keyword Keyword?      @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  retests PublicationRetest[]
+
+  @@index([contentId])
+  @@index([brandId])
+  @@index([keywordId])
+  @@index([platform])
+  @@index([status])
+  @@map("content_publications")
+}
+
+model PublicationRetest {
+  id              String                  @id @default(cuid())
+  publicationId   String
+  monitoringJobId String?
+  scheduledAt     DateTime                @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  beforeScore     Int?
+  afterScore      Int?
+  deltaScore      Int?
+  resultSummary   String?
+  status          PublicationRetestStatus @default(PENDING)
+  failureReason   String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  publication  ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  monitoringJob MonitoringJob?    @relation(fields: [monitoringJobId], references: [id], onDelete: SetNull)
+
+  @@index([publicationId])
+  @@index([monitoringJobId])
+  @@index([status, scheduledAt])
+  @@map("publication_retests")
+}
+
+model PlatformSession {
+  id               String                @id @default(cuid())
+  platformId       String                @unique
+  storageStatePath String?
+  collectorConfig  Json                  @default("{}")
+  status           PlatformSessionStatus @default(NOT_CONFIGURED)
+  lastCheckedAt    DateTime?
+  notes            String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  platform AiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("platform_sessions")
+}
+
+model PipelineRun {
+  id              String            @id @default(cuid())
+  monitoringJobId String
+  status          PipelineRunStatus @default(RUNNING)
+  steps           Json              @default("[]")
+  startedAt       DateTime          @default(now())
+  completedAt     DateTime?
+  errorMessage    String?
+  createdAt       DateTime          @default(now())
+
+  monitoringJob MonitoringJob @relation(fields: [monitoringJobId], references: [id], onDelete: Cascade)
+
+  @@index([monitoringJobId])
+  @@index([status, startedAt])
+  @@map("pipeline_runs")
+}
+
+model ClientShareLink {
+  id        String          @id @default(cuid())
+  clientId  String
+  token     String          @unique
+  status    ShareLinkStatus @default(ACTIVE)
+  expiresAt DateTime?
+  notes     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  client     Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accessLogs ShareLinkAccessLog[]
+
+  @@index([clientId])
+  @@index([status])
+  @@map("client_share_links")
+}
+
+model ShareLinkAccessLog {
+  id          String   @id @default(cuid())
+  shareLinkId String
+  path        String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  shareLink ClientShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+
+  @@index([shareLinkId, createdAt])
+  @@map("share_link_access_logs")
+}
+
+model OptimizationTask {
+  id                String                   @id @default(cuid())
+  brandId           String
+  keywordId         String?
+  geoScoreId        String?
+  type              OptimizationTaskType
+  priority          OptimizationTaskPriority @default(MEDIUM)
+  status            OptimizationTaskStatus   @default(OPEN)
+  title             String
+  recommendation    String
+  rationale         String
+  targetPlatform    String?
+  targetScoreImpact Int                      @default(0)
+  dueDate           DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  brand                  Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  keyword                Keyword?                @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  geoScore               GeoScore?               @relation(fields: [geoScoreId], references: [id], onDelete: SetNull)
+  answerAnalysis         AnswerAnalysis?         @relation(fields: [answerAnalysisId], references: [id])
+  answerAnalysisId       String?
+  contentAssets          ContentAsset[]
+  improvementExperiments ImprovementExperiment[]
+
+  @@index([brandId])
+  @@index([brandId, status])
+  @@index([keywordId])
+  @@index([geoScoreId])
+  @@index([status, priority])
+  @@index([type])
+  @@map("optimization_tasks")
+}
+
+model ImprovementExperiment {
+  id                     String                      @id @default(cuid())
+  brandId                String
+  keywordId              String
+  platformId             String
+  optimizationTaskId     String?                     @unique
+  baselineRankResultId   String?
+  replayRankResultId     String?
+  validationRankResultId String?
+  status                 ImprovementExperimentStatus @default(PLANNED)
+  hypothesis             String?
+  actionSummary          String?
+  nextStep               String?
+  baselineRank           Int?
+  replayRank             Int?
+  validationRank         Int?
+  baselineScore          Int                         @default(0)
+  replayScore            Int?
+  validationScore        Int?
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+
+  brand                Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  keyword              Keyword           @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  platform             AiPlatform        @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  optimizationTask     OptimizationTask? @relation(fields: [optimizationTaskId], references: [id], onDelete: SetNull)
+  baselineRankResult   RankResult?       @relation("BaselineRankResult", fields: [baselineRankResultId], references: [id], onDelete: SetNull)
+  replayRankResult     RankResult?       @relation("ReplayRankResult", fields: [replayRankResultId], references: [id], onDelete: SetNull)
+  validationRankResult RankResult?       @relation("ValidationRankResult", fields: [validationRankResultId], references: [id], onDelete: SetNull)
+
+  @@index([brandId])
+  @@index([keywordId])
+  @@index([platformId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("improvement_experiments")
+}

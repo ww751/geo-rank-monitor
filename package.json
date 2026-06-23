@@ -1,0 +1,52 @@
+{
+  "name": "geo-rank-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
+    "auth:save-state": "tsx scripts/save-platform-storage-state.ts",
+    "worker:monitoring": "tsx scripts/run-monitoring-queue.ts",
+    "test:brand-resolver": "tsx src/lib/brand-entity-resolver.test.ts",
+    "test:ranking-extractor": "tsx src/lib/ranking-extractor.test.ts",
+    "test:geo-score-engine": "tsx src/lib/geo-score-engine.test.ts",
+    "test:optimization-tasks": "tsx src/lib/optimization-task-generator.test.ts",
+    "test:improvement-experiments": "tsx src/lib/improvement-experiment-service.test.ts",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "next": "^15.5.18",
+    "pdfkit": "^0.18.0",
+    "pg": "^8.21.0",
+    "pptxgenjs": "^4.0.1",
+    "prisma": "^7.8.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pdfkit": "^0.17.6",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
+    "eslint": "^9",
+    "eslint-config-next": "^15.5.18",
+    "tailwindcss": "^4",
+    "tsx": "^4.22.3",
+    "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.60.0"
+  }
+}
