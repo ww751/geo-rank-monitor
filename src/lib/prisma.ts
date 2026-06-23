@@ -35,15 +35,16 @@ function createPrismaClient(): PrismaClient {
 }
 
 // 构建时 DATABASE_URL 可能不存在，延迟初始化避免 next build 阶段报错
-const prismaProxy = new Proxy({} as PrismaClient, {
-  get(_, prop) {
+// 使用 any 绕过 Proxy 与 PrismaClient 的类型兼容问题
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const prisma: PrismaClient = new Proxy({} as any, {
+  get(_, prop: string | symbol) {
     const client = globalForPrisma.prisma ?? createPrismaClient();
-    const value = (client as Record<string | symbol, unknown>)[prop];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const value = (client as any)[prop];
     if (typeof value === "function") {
       return value.bind(client);
     }
     return value;
   },
 });
-
-export const prisma = prismaProxy;
